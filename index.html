@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radar de Vuelos</title>
+  <style>
+    :root { color-scheme: dark; --bg:#08111f; --panel:#101d30; --line:#243652; --text:#eef5ff; --muted:#92a5be; --cyan:#55d9e8; --green:#78e08f; --orange:#ffb45d; --red:#ff6b79; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; color:var(--text); background:radial-gradient(circle at 15% 0%,#15365b 0,transparent 34rem),var(--bg); }
+    main { width:min(1180px,calc(100% - 32px)); margin:auto; padding:42px 0 60px; }
+    header { display:flex; gap:24px; align-items:end; justify-content:space-between; margin-bottom:30px; }
+    .eyebrow { color:var(--cyan); font-size:.75rem; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
+    h1 { margin:.35rem 0 0; font-size:clamp(2.2rem,6vw,4.5rem); line-height:.92; letter-spacing:-.055em; }
+    .subtitle { max-width:580px; color:var(--muted); line-height:1.6; }
+    button,input { font:inherit; }
+    button { border:0; border-radius:12px; padding:12px 17px; font-weight:800; cursor:pointer; color:#06131b; background:var(--cyan); }
+    button.secondary { color:var(--text); background:#1b2b43; border:1px solid var(--line); }
+    button:disabled { opacity:.5; cursor:wait; }
+    .grid { display:grid; grid-template-columns:1.4fr .8fr; gap:20px; }
+    .panel { border:1px solid var(--line); border-radius:20px; padding:22px; background:color-mix(in srgb,var(--panel) 92%,transparent); box-shadow:0 20px 60px #0004; }
+    .panel h2 { margin:0 0 18px; font-size:1rem; letter-spacing:.04em; }
+    form { display:grid; grid-template-columns:.8fr .8fr 1.2fr 1fr auto; gap:10px; }
+    label { display:grid; gap:7px; color:var(--muted); font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+    input { width:100%; min-width:0; color:var(--text); background:#081322; border:1px solid var(--line); border-radius:11px; padding:12px; outline:none; }
+    input:focus { border-color:var(--cyan); box-shadow:0 0 0 3px #55d9e822; }
+    form button { align-self:end; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:20px 0; }
+    .stat { padding:18px; border:1px solid var(--line); border-radius:16px; background:#0c1829; }
+    .stat span { display:block; color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; }
+    .stat strong { display:block; margin-top:8px; font-size:1.8rem; }
+    .route { display:grid; grid-template-columns:1fr auto; gap:14px; padding:16px 0; border-top:1px solid var(--line); }
+    .route:first-child { border-top:0; }
+    .route-title { font-size:1.15rem; font-weight:850; }
+    .route-meta,.empty { margin-top:5px; color:var(--muted); font-size:.86rem; }
+    .price { text-align:right; font-size:1.15rem; font-weight:850; }
+    .badge { display:inline-block; margin-top:6px; padding:4px 8px; border-radius:999px; color:var(--green); background:#78e08f18; font-size:.7rem; font-weight:800; text-transform:uppercase; }
+    .badge.off { color:var(--muted); background:#92a5be18; }
+    table { width:100%; border-collapse:collapse; font-size:.86rem; }
+    th,td { padding:12px 10px; text-align:left; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; }
+    .calendar-link { display:inline-block; padding:7px 10px; border-radius:9px; color:#06131b; background:var(--orange); font-size:.72rem; font-weight:850; text-decoration:none; white-space:nowrap; }
+    .status { min-height:24px; margin:16px 0 0; color:var(--muted); }
+    .status.error { color:var(--red); }
+    @media (max-width:850px) { header { align-items:start; flex-direction:column; } .grid { grid-template-columns:1fr; } form { grid-template-columns:1fr 1fr; } .stats { grid-template-columns:1fr; } }
+    @media (max-width:520px) { form { grid-template-columns:1fr; } .table-wrap { overflow:auto; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><div class="eyebrow">Monitor inteligente</div><h1>Radar de<br>Vuelos</h1></div>
+      <div><p class="subtitle">Sigue rutas por fecha, conserva una observación diaria y recibe alertas cuando el precio baja de tu objetivo.</p><button id="scan">Escanear ahora</button></div>
+    </header>
+
+    <section class="panel">
+      <h2>Nueva ruta</h2>
+      <form id="route-form">
+        <label>Origen<input name="origen" maxlength="3" placeholder="LIM" required></label>
+        <label>Destino<input name="destino" maxlength="3" placeholder="CUZ" required></label>
+        <label>Fecha de salida<input name="fecha_salida" type="date" required></label>
+        <label>Objetivo USD<input name="precio_objetivo" type="number" min="1" step="0.01" placeholder="50" required></label>
+        <button type="submit">Guardar ruta</button>
+      </form>
+      <p id="status" class="status" aria-live="polite"></p>
+    </section>
+
+    <div class="stats">
+      <div class="stat"><span>Rutas activas</span><strong id="active-count">0</strong></div>
+      <div class="stat"><span>Observaciones</span><strong id="price-count">0</strong></div>
+      <div class="stat"><span>Oportunidades</span><strong id="opportunity-count">0</strong></div>
+    </div>
+
+    <section class="grid">
+      <article class="panel"><h2>Rutas vigiladas</h2><div id="routes"></div></article>
+      <article class="panel"><h2>Histórico reciente</h2><div class="table-wrap"><table><thead><tr><th>Ruta</th><th>Precio</th><th>Vuelo</th><th>Decisión</th></tr></thead><tbody id="history"></tbody></table></div></article>
+    </section>
+  </main>
+
+  <script>
+    const statusNode = document.querySelector('#status');
+    const scanButton = document.querySelector('#scan');
+    const money = value => Number(value).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const shortDate = value => value ? new Date(value).toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+    function setStatus(message='', error=false) {
+      statusNode.textContent = message;
+      statusNode.classList.toggle('error', error);
+    }
+
+    async function api(path, options={}) {
+      const response = await fetch(path,{headers:{'Content-Type':'application/json'},...options});
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      return payload.data;
+    }
+
+    function appendText(parent, tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = text;
+      parent.append(node);
+      return node;
+    }
+
+    function render(data) {
+      const {rutas,precios} = data;
+      document.querySelector('#active-count').textContent = rutas.filter(route => route.activa).length;
+      document.querySelector('#price-count').textContent = precios.length;
+      document.querySelector('#opportunity-count').textContent = precios.filter(item => item.precio <= item.precio_objetivo).length;
+
+      const routesNode = document.querySelector('#routes');
+      routesNode.replaceChildren();
+      if (!rutas.length) appendText(routesNode,'p','empty','No hay rutas. Agrega la primera arriba.');
+      rutas.forEach(route => {
+        const row = appendText(routesNode,'div','route','');
+        const info = appendText(row,'div','','');
+        appendText(info,'div','route-title',`${route.origen} → ${route.destino}`);
+        const travelDate = route.fecha_salida ? `salida ${route.fecha_salida}` : 'fecha flexible';
+        appendText(info,'div','route-meta',`${travelDate} · objetivo USD ${money(route.precio_objetivo)} · ${route.ultima_consulta ? `consulta ${route.ultima_consulta}` : 'sin consultas'}`);
+        const side = appendText(row,'div','','');
+        appendText(side,'div','price',route.ultimo_precio == null ? '—' : `${route.ultima_moneda} ${money(route.ultimo_precio)}`);
+        appendText(side,'span',`badge${route.activa ? '' : ' off'}`,route.activa ? 'Activa' : 'Pausada');
+      });
+
+      const history = document.querySelector('#history');
+      history.replaceChildren();
+      if (!precios.length) {
+        const row = document.createElement('tr');
+        const cell = appendText(row,'td','empty','Aún no hay observaciones.');
+        cell.colSpan = 4;
+        history.append(row);
+      }
+      precios.slice(0,12).forEach(item => {
+        const row = document.createElement('tr');
+        appendText(row,'td','',`${item.origen}→${item.destino}`);
+        appendText(row,'td','',`${item.moneda} ${money(item.precio)}`);
+        appendText(row,'td','',shortDate(item.fecha_vuelo));
+        const actionCell = document.createElement('td');
+        const calendarLink = document.createElement('a');
+        calendarLink.className = 'calendar-link';
+        calendarLink.href = item.calendar_url;
+        calendarLink.target = '_blank';
+        calendarLink.rel = 'noopener noreferrer';
+        calendarLink.textContent = 'Proponer evento';
+        actionCell.append(calendarLink);
+        row.append(actionCell);
+        history.append(row);
+      });
+    }
+
+    async function refresh() {
+      try { render(await api('/api/resumen')); }
+      catch (error) { setStatus(error.message,true); }
+    }
+
+    document.querySelector('#route-form').addEventListener('submit',async event => {
+      event.preventDefault();
+      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
+      try {
+        await api('/api/rutas',{method:'POST',body:JSON.stringify(Object.fromEntries(form))});
+        formElement.reset();
+        setStatus('Ruta guardada.');
+        await refresh();
+      } catch (error) { setStatus(error.message,true); }
+    });
+
+    scanButton.addEventListener('click',async () => {
+      scanButton.disabled = true;
+      setStatus('Consultando Travelpayouts…');
+      try {
+        const results = await api('/api/escanear',{method:'POST',body:'{}'});
+        const noFares = results.filter(result => result.status === 'no_fares');
+        const completed = results.length - noFares.length;
+        const detail = noFares.length
+          ? ` ${noFares.length} sin tarifas: ${noFares.map(result => `${result.origin}→${result.destination}`).join(', ')}.`
+          : '';
+        setStatus(`Consulta terminada: ${completed} con precio.${detail}`);
+        await refresh();
+      } catch (error) { setStatus(error.message,true); }
+      finally { scanButton.disabled = false; }
+    });
+
+    const dateInput = document.querySelector('input[name="fecha_salida"]');
+    dateInput.min = new Date().toLocaleDateString('en-CA');
+    refresh();
+  </script>
+</body>
+</html>
